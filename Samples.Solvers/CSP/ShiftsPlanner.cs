@@ -132,18 +132,27 @@ namespace Samples.Solvers.CSP
             return solution;
         }
 
-        public SimplexSolver PrepareSimplexSolver(out Dictionary<Models.Shift, int> shiftsExt, out int vidGoal)
+        public SimplexSolver PrepareSimplexSolver(int maxAgents, out Dictionary<Models.Shift, int> shiftsExt, out int vidGoal)
         {
             var SX = new SimplexSolver();
 
             var maxRq = HalfHourRequirements.Max(x => x.RequiredForce);
+            var sumRq = HalfHourRequirements.Sum(x => x.RequiredForce);
 
             shiftsExt = null;
 
             //goal
-            int vidgoal;
-            SX.AddRow(key: "goal", vid: out vidgoal);
-            
+            int ridgoal;
+            SX.AddRow(key: "goal", vid: out ridgoal);
+            SX.SetBounds(ridgoal, lower: 0, upper: Rational.PositiveInfinity);// upper: maxAgents); //total agents must range from 0 to max agents available
+            SX.AddGoal(vid: ridgoal, pri: 2, fMinimize: true); //minimize total number of agents for that day
+
+            //goal2: Minimize excess force
+            int ridexcess;
+            SX.AddRow(key: "excess", vid: out ridexcess);
+            SX.SetBounds(ridexcess, lower: 0, upper: sumRq);
+            SX.AddGoal(vid: ridexcess, pri: 1, fMinimize: true);
+
             var shiftsX = new Dictionary<Models.Shift, int>();
             int i = 0;
             Shifts.ForEach(x => {
@@ -151,7 +160,7 @@ namespace Samples.Solvers.CSP
                 SX.AddVariable(key: string.Format("{0}. {1}", i, x.Name), vid: out vid);
                 SX.SetBounds(vid: vid, lower: 0, upper: maxRq);
                 shiftsX.Add(x, vid);
-                SX.SetCoefficient(vidRow: vidgoal, vidVar: vid, num: x.Duration.Hours <= 8 ? 1 : 10); //each shift's count affects total count
+                SX.SetCoefficient(vidRow: ridgoal, vidVar: vid, num: x.Duration.Hours <= 8 ? 1 : 10); //each shift's count affects total count
                 i++;
             });
 
@@ -169,15 +178,23 @@ namespace Samples.Solvers.CSP
                 //if we need agents but no shifts exists for a halfhour, do not add a constraint
                 if (vidShiftsActive.Count > 0)
                 {
-                    int vidHalf;
-                    SX.AddRow(key: string.Format("{0:hh}:{0:mm}", hh.Start), vid: out vidHalf);
-                    vidShiftsActive.ForEach(vidShift => SX.SetCoefficient(vidRow: vidHalf, vidVar: vidShift, num: 1));
-                    SX.SetBounds(vid: vidHalf, lower: hh.RequiredForce, upper: maxRq);
+
+                    int ridHalf;
+                    SX.AddRow(key: string.Format("{0:hh}:{0:mm}", hh.Start), vid: out ridHalf);
+                    //specify whichs shifts contributes to half hour's total force
+                    vidShiftsActive.ForEach(vidShift =>
+                    {
+                        SX.SetCoefficient(vidRow: ridHalf, vidVar: vidShift, num: 1);
+                        SX.SetCoefficient(vidRow: ridexcess, vidVar: vidShift, num: 1);
+                    });
+                    //each 30' span, must have at least as many required agents
+                    SX.SetBounds(vid: ridHalf, lower: hh.RequiredForce, upper: Rational.PositiveInfinity);
                 }
             });
 
+
             shiftsExt = shiftsX;
-            vidGoal = vidgoal;
+            vidGoal = ridgoal;
 
             return SX;
         }
