@@ -56,17 +56,28 @@ namespace Samples.Solvers
                     TimeSpan ts30mi = GetTimeSpanMinutes(30);
                     var shifts = new List<CSP.Models.Shift>();
                     shifts.Add(new CSP.Models.Shift(name: "A", start: GetTimeSpanHours(7), duration: ts8h));
-                    //shifts.Add(new CSP.Models.Shift(name: "A++", start: GetTimeSpanHours(7), duration: ts10h));
+                    shifts.Add(new CSP.Models.Shift(name: "G", start: GetTimeSpanHours(8), duration: ts8h));
                     shifts.Add(new CSP.Models.Shift(name: "B", start: GetTimeSpanHours(9), duration: ts8h));
-                    //shifts.Add(new CSP.Models.Shift(name: "B+", start: GetTimeSpanHours(9), duration: ts9h));
-                    //shifts.Add(new CSP.Models.Shift(name: "B++", start: GetTimeSpanHours(9), duration: ts10h));
+                    shifts.Add(new CSP.Models.Shift(name: "I", start: GetTimeSpanHours(10), duration: ts8h));
                     shifts.Add(new CSP.Models.Shift(name: "E", start: GetTimeSpanHours(11), duration: ts8h));
                     shifts.Add(new CSP.Models.Shift(name: "D", start: GetTimeSpanHours(13), duration: ts8h));
                     shifts.Add(new CSP.Models.Shift(name: "C", start: GetTimeSpanHours(15), duration: ts8h));
-                    //shifts.Add(new CSP.Models.Shift(name: "CL", start: GetTimeSpanHours(16), duration: ts8h));
+                    shifts.Add(new CSP.Models.Shift(name: "CL", start: GetTimeSpanHours(16), duration: ts8h));
                     shifts.Add(new CSP.Models.Shift(name: "H", start: GetTimeSpanHours(17), duration: ts8h));
-                    shifts.Add(new CSP.Models.Shift(name: "G", start: GetTimeSpanHours(8), duration: ts8h));
-                    //shifts.Add(new CSP.Models.Shift(name: "I", start: GetTimeSpanHours(10), duration: ts8h));
+
+                    shifts.Add(new CSP.Models.Shift(name: "A++", start: GetTimeSpanHours(7), duration: ts10h));
+                    shifts.Add(new CSP.Models.Shift(name: "B+", start: GetTimeSpanHours(9), duration: ts9h));
+                    shifts.Add(new CSP.Models.Shift(name: "B++", start: GetTimeSpanHours(9), duration: ts10h));
+                    shifts.Add(new CSP.Models.Shift(name: "I+", start: GetTimeSpanHours(10), duration: ts9h));
+                    shifts.Add(new CSP.Models.Shift(name: "I++", start: GetTimeSpanHours(10), duration: ts10h));
+                    shifts.Add(new CSP.Models.Shift(name: "E+", start: GetTimeSpanHours(11), duration: ts9h));
+                    shifts.Add(new CSP.Models.Shift(name: "E++", start: GetTimeSpanHours(11), duration: ts10h));
+                    shifts.Add(new CSP.Models.Shift(name: "+D", start: GetTimeSpanHours(12), duration: ts9h));
+                    shifts.Add(new CSP.Models.Shift(name: "D++", start: GetTimeSpanHours(13), duration: ts10h));
+                    shifts.Add(new CSP.Models.Shift(name: "C+", start: GetTimeSpanHours(15), duration: ts9h));
+                    shifts.Add(new CSP.Models.Shift(name: "CL+", start: GetTimeSpanHours(16), duration: ts9h));
+                    shifts.Add(new CSP.Models.Shift(name: "++H", start: GetTimeSpanHours(15), duration: ts10h));
+
                     solveShifts.Shifts = shifts;
 
                     //Set requirements per shift
@@ -79,6 +90,17 @@ namespace Samples.Solvers
                         ts = ts.Add(ts30mi);
                     }
                     solveShifts.HalfHourRequirements = requirements;
+
+                    //************** SIMPLEX QUICK SAMPLE
+                    Dictionary<CSP.Models.Shift, int> shiftsX;
+                    int vidGoal;
+                    var SX = solveShifts.PrepareSimplexSolver(shiftsExt: out shiftsX, vidGoal: out vidGoal);
+                    var sxParams = new SimplexSolverParams();
+                    var solverX = SX.Solve(sxParams);
+                    Console.WriteLine("Goal: {0}", solverX.GetValue(vidGoal).ToDouble());
+                    foreach (var shift in shiftsX)
+                        Console.WriteLine("  {0,5} {2:hh}:{2:mm}-{3:hh}:{3:mm}: {1,3} agents", shift.Key.Name, solverX.GetValue(shift.Value).ToDouble(), shift.Key.Start, shift.Key.End);
+                    //************** SIMPLEX QUICK SAMPLE
 
                     var S = solveShifts.PrepareSolver();
                     //S.Parameters.EnumerateInterimSolutions = false;

@@ -132,6 +132,56 @@ namespace Samples.Solvers.CSP
             return solution;
         }
 
+        public SimplexSolver PrepareSimplexSolver(out Dictionary<Models.Shift, int> shiftsExt, out int vidGoal)
+        {
+            var SX = new SimplexSolver();
+
+            var maxRq = HalfHourRequirements.Max(x => x.RequiredForce);
+
+            shiftsExt = null;
+
+            //goal
+            int vidgoal;
+            SX.AddRow(key: "goal", vid: out vidgoal);
+            
+            var shiftsX = new Dictionary<Models.Shift, int>();
+            int i = 0;
+            Shifts.ForEach(x => {
+                int vid;
+                SX.AddVariable(key: string.Format("{0}. {1}", i, x.Name), vid: out vid);
+                SX.SetBounds(vid: vid, lower: 0, upper: maxRq);
+                shiftsX.Add(x, vid);
+                SX.SetCoefficient(vidRow: vidgoal, vidVar: vid, num: x.Duration.Hours <= 8 ? 1 : 10); //each shift's count affects total count
+                i++;
+            });
+
+            //Constraint - Agents from every active shift on every half hour must be >= requirement for that half hour
+            HalfHourRequirements.ForEach( hh =>
+            {
+                List<int> vidShiftsActive = new List<int>();
+                foreach (var entry in shiftsX)
+                {
+                    if (entry.Key.IncludesHalfHour(hh.Start))
+                        vidShiftsActive.Add(entry.Value);
+                }
+
+                //add constraint for sum of force of active shifts on that halfhour
+                //if we need agents but no shifts exists for a halfhour, do not add a constraint
+                if (vidShiftsActive.Count > 0)
+                {
+                    int vidHalf;
+                    SX.AddRow(key: string.Format("{0:hh}:{0:mm}", hh.Start), vid: out vidHalf);
+                    vidShiftsActive.ForEach(vidShift => SX.SetCoefficient(vidRow: vidHalf, vidVar: vidShift, num: 1));
+                    SX.SetBounds(vid: vidHalf, lower: hh.RequiredForce, upper: maxRq);
+                }
+            });
+
+            shiftsExt = shiftsX;
+            vidGoal = vidgoal;
+
+            return SX;
+        }
+
         public ConstraintSystem PrepareSolver()
         {
             ConstraintSystem S = ConstraintSystem.CreateSolver();
