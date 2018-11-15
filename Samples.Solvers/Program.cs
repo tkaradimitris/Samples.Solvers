@@ -60,7 +60,7 @@ namespace Samples.Solvers
                     if (param1.GetValueOrDefault() < 1 || param1.GetValueOrDefault() > 10) break;
                     CSP.FootballMatchRoundRobinSample.Run(teamsNo: param1.Value);
                 }
-                else if(option == 5)
+                else if (option == 5)
                 {
                     // All the below samples takes advantage of the convention for vids in CQN solver
                     // vids convention is that the only row/goal gets vid 0 and each 
@@ -74,6 +74,8 @@ namespace Samples.Solvers
                     MIP.CuttingStock.Knapsack();
                     MIP.CuttingStock.ShortCuttingStock();
                 }
+                else if (option == 7)
+                    Services_ColumnGenerator();
 
 
                 Console.WriteLine("-press any key to restart or Ctrl-c to exit -");
@@ -167,7 +169,7 @@ namespace Samples.Solvers
                     shiftsForce.Add(new CSP.Models.ShiftForce(shift: shift.Key, force: (int)force));
                 }
                 solveShifts.ShowSolution(1, shiftsForce, showAgents: true, showSlots: true);
-
+                
             }
             else
             {
@@ -208,7 +210,7 @@ namespace Samples.Solvers
             }
             solveShifts.HalfHourRequirements = requirements;
             
-            var S = solveShifts.PrepareSolver();
+            var S = solveShifts.PrepareCspSolver();
             //S.Parameters.EnumerateInterimSolutions = false;
             //S.Parameters.Algorithm = ConstraintSolverParams.CspSearchAlgorithm.TreeSearch;
             //S.Parameters.Solving = () => { Console.WriteLine("Solving"); } ;
@@ -256,6 +258,25 @@ namespace Samples.Solvers
                 Console.WriteLine(" no solution found", timer.Elapsed);
         }
 
+        protected static void Services_ColumnGenerator()
+        {
+            Services.ColumnGeneration generation = new Services.ColumnGeneration();
+            bool bContinue;
+            generation.Initialize();
+            do
+            {
+                //find a solution with real values
+                bContinue = generation.SolveMasterModel();
+                //If found an optimal solution to relaxed model
+                if (bContinue)
+                    //try to find a new pattern complementing the existing ones
+                    bContinue = generation.FindNewPattern();
+            } while (bContinue);
+            
+            //no more new solutions exist -> solve with integers
+            generation.SolveFinalMIPModel();
+        }
+
         protected static Dictionary<int, string> InitOptions()
         {
             Dictionary<int, string> options = new Dictionary<int, string>();
@@ -265,6 +286,7 @@ namespace Samples.Solvers
             options.Add(4, "RoundRobin - Sched Teams paired matches");
             options.Add(5, "Rosenbrock - Rosenbrock function");
             options.Add(6, "CuttingStock - Cut cloth roll with min waste");
+            options.Add(7, "Services01 - Column Generation");
             return options;
         }
 
