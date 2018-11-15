@@ -12,6 +12,7 @@ namespace Samples.Solvers.CSP
     public class ShiftsPlanner
     {
         public List<Models.Shift> Shifts { get; set; }
+        public List<Models.Shift> OvertimeShifts { get; set; }
         public Dictionary<int, List<Models.ShiftForce>> ShiftsForce { get; protected set; }
         public List<Models.HalfHourRequirement> HalfHourRequirements { get; set; }
         public int MaxAgents { get; private set; }
@@ -285,6 +286,106 @@ namespace Samples.Solvers.CSP
             vidGoal = ridgoal;
 
             return SX;
+        }
+
+        public Solution alternative_solve(out Dictionary<Models.Shift, Decision> shiftsN, out Dictionary<Models.Shift, Decision> shiftsO)
+        {
+            SolverContext SC = SolverContext.GetContext();
+            Model model = SC.CreateModel();
+
+            var maxRq = HalfHourRequirements.Max(x => x.RequiredForce);
+            shiftsN = shiftsO = null;
+
+            //split shifts into two Dictionaries (each dict holds each Shift as key and the Decision variable as Value)
+            var normal_shifts = new Dictionary<Models.Shift, Decision>(); //for normal shifts
+            int i = 0;
+            Shifts.ForEach(x => {
+                Decision des = new Decision(Domain.IntegerRange(0, maxRq), string.Format("{0}_{1}", x.Name, i));
+                normal_shifts.Add(x, des);
+                model.AddDecision(des);
+                i++;
+            });
+
+            var overtime_shifts = new Dictionary<Models.Shift, Decision>(); //for overtime shifts
+            i = 0;
+            OvertimeShifts.ForEach(x => {
+                Decision des = new Decision(Domain.IntegerRange(0, maxRq), string.Format("{0}_{1}", x.Name, i));
+                overtime_shifts.Add(x, des);
+                model.AddDecision(des);
+                i++;
+            });
+
+            List<Decision> excess = new List<Decision>(); //used to calculate sum of excess values
+            HalfHourRequirements.ForEach(hh =>
+            {
+                var ShiftsActive = new List<Decision>();
+                foreach (var entry in normal_shifts)
+                {
+                    if (entry.Key.IncludesHalfHour(hh.Start))
+                    {
+                        ShiftsActive.Add(entry.Value);
+                        excess.Add(entry.Value);
+                    }
+                }
+                foreach (var entry in overtime_shifts)
+                {
+                    if (entry.Key.IncludesHalfHour(hh.Start))
+                    {
+                        ShiftsActive.Add(entry.Value);
+                        excess.Add(entry.Value);
+                    }
+                }
+
+                //add constraint for sum of force of active shifts on that halfhour
+                //if we need agents but no shifts exists for a halfhour, do not add a constraint
+                if (ShiftsActive.Count > 0)
+                {
+                    var sum_constr = new SumTermBuilder(ShiftsActive.Count);
+                    ShiftsActive.ForEach(s => sum_constr.Add(s));
+
+                    var constr = sum_constr.ToTerm() >= hh.RequiredForce;
+                    model.AddConstraint(string.Format("_{0:hh}{0:mm}", hh.Start), constr);
+
+                    //constr = sum_constr.ToTerm() <= hh.RequiredForce * 2.0;
+                    //model.AddConstraint(string.Format("limitconst_for_{0:hh}{0:mm}", hh.Start), constr);
+                }
+            });
+
+            //Constrain maximum number of agents working 8hour shifts
+            var max_agents_constraint = new SumTermBuilder(Shifts.Count);
+            foreach (var entry in normal_shifts)
+            {
+                max_agents_constraint.Add(entry.Value);
+            }
+            var ma_constr = max_agents_constraint.ToTerm() <= MaxAgents;
+            model.AddConstraint("Max_agents_constraint", ma_constr);
+
+            //1st goal: Minimize overtime shifts (if work manageable by normal shifts, no overtime shifts will be used)
+            var overtime_obj = new SumTermBuilder(OvertimeShifts.Count);
+            foreach (var entry in overtime_shifts)
+            {
+                overtime_obj.Add(entry.Value);
+            }
+            model.AddGoal("Minimize_overtime", GoalKind.Minimize, overtime_obj.ToTerm());
+
+            //2st goal: Minimize normal shifts
+            var normal_obj = new SumTermBuilder(Shifts.Count);
+            foreach (var entry in normal_shifts)
+            {
+                normal_obj.Add(entry.Value);
+            }
+            model.AddGoal("Minimize_normal", GoalKind.Minimize, normal_obj.ToTerm());
+
+            //3rd goal: Try to minimize excess
+            var sumReqs = HalfHourRequirements.Sum(x => x.RequiredForce);
+            model.AddGoal("Minimize_excess", GoalKind.Minimize, Model.Sum(excess.ToArray()) - sumReqs);
+
+            Solution solution = SC.Solve();
+
+            shiftsN = normal_shifts;
+            shiftsO = overtime_shifts;
+
+            return solution;
         }
 
         public ConstraintSystem PrepareCspSolver()

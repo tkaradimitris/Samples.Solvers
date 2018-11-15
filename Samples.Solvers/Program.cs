@@ -45,11 +45,13 @@ namespace Samples.Solvers
                 Console.WriteLine(options[option]);
                 if (option == 1)
                 {
-                    param1 = ReadSelectionInt("Method: Simplex=1, CSP=2", 1, min: 1, max: 2);
+                    param1 = ReadSelectionInt("Method: Simplex=1, CSP=2, Alternative_Simplex=3", 1, min: 1, max: 3);
                     if (param1 == 1)
                         CCN_Simplex();
-                    else
+                    else if (param1 == 2)
                         CCN_CSP();
+                    else
+                        alternative_solution();
                 }
                 else if (option == 2) CSP.BusDriversSample.Run();
                 else if (option == 3) CSP.ZebraSample.Run();
@@ -258,6 +260,77 @@ namespace Samples.Solvers
                 Console.WriteLine(" no solution found", timer.Elapsed);
         }
 
+        protected static void alternative_solution()
+        {
+            int max_available = ReadSelectionInt("Max agents", 100, min: 1, max: 1000);
+
+            //Set agent shifts
+            var solveShifts = new CSP.ShiftsPlanner(max_available);
+
+            TimeSpan ts8h = GetTimeSpanHours(8);
+            TimeSpan ts9h = GetTimeSpanHours(9);
+            TimeSpan ts10h = GetTimeSpanHours(10);
+            TimeSpan ts30mi = GetTimeSpanMinutes(30);
+
+            var shifts = new List<CSP.Models.Shift>
+            {
+                new CSP.Models.Shift(name: "A", start: GetTimeSpanHours(7), duration: ts8h),
+                new CSP.Models.Shift(name: "G", start: GetTimeSpanHours(8), duration: ts8h),
+                new CSP.Models.Shift(name: "B", start: GetTimeSpanHours(9), duration: ts8h),
+                new CSP.Models.Shift(name: "I", start: GetTimeSpanHours(10), duration: ts8h),
+                new CSP.Models.Shift(name: "E", start: GetTimeSpanHours(11), duration: ts8h),
+                new CSP.Models.Shift(name: "D", start: GetTimeSpanHours(13), duration: ts8h),
+                new CSP.Models.Shift(name: "C", start: GetTimeSpanHours(15), duration: ts8h),
+                new CSP.Models.Shift(name: "CL", start: GetTimeSpanHours(16), duration: ts8h),
+                new CSP.Models.Shift(name: "H", start: GetTimeSpanHours(17), duration: ts8h)
+            };
+
+            var OvertimeShifts = new List<CSP.Models.Shift>
+            {
+                new CSP.Models.Shift(name: "Aoo", start: GetTimeSpanHours(7), duration: ts10h),
+                new CSP.Models.Shift(name: "Bo", start: GetTimeSpanHours(9), duration: ts9h),
+                new CSP.Models.Shift(name: "Boo", start: GetTimeSpanHours(9), duration: ts10h),
+                new CSP.Models.Shift(name: "Io", start: GetTimeSpanHours(10), duration: ts9h),
+                new CSP.Models.Shift(name: "Ioo", start: GetTimeSpanHours(10), duration: ts10h),
+                new CSP.Models.Shift(name: "Eo", start: GetTimeSpanHours(11), duration: ts9h),
+                new CSP.Models.Shift(name: "Eoo", start: GetTimeSpanHours(11), duration: ts10h),
+                new CSP.Models.Shift(name: "Do", start: GetTimeSpanHours(12), duration: ts9h),
+                new CSP.Models.Shift(name: "Doo", start: GetTimeSpanHours(13), duration: ts10h),
+                new CSP.Models.Shift(name: "Co", start: GetTimeSpanHours(15), duration: ts9h),
+                new CSP.Models.Shift(name: "CLo", start: GetTimeSpanHours(16), duration: ts9h),
+                new CSP.Models.Shift(name: "Hoo", start: GetTimeSpanHours(15), duration: ts10h)
+            };
+
+            solveShifts.Shifts = shifts;
+            solveShifts.OvertimeShifts = OvertimeShifts;
+
+            //Set requirements per shift
+            int[] liveData = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 6, 7, 9, 11, 22, 25, 21, 32, 44, 38, 33, 48, 41, 54, 50, 42, 43, 45, 60, 62, 56, 44, 33, 22, 11, 18, 16, 24, 28, 6, 12, 15, 8, 6 };
+            var requirements = new List<CSP.Models.HalfHourRequirement>();
+            TimeSpan ts = GetTimeSpanHours(0);
+            for (int i = 0; i < liveData.Length; i++)
+            {
+                requirements.Add(new CSP.Models.HalfHourRequirement(start: ts, requiredForce: liveData[i]));
+                ts = ts.Add(ts30mi);
+            }
+            solveShifts.HalfHourRequirements = requirements;
+
+            Dictionary<CSP.Models.Shift, Decision> shiftsN, shiftsO;
+
+            var solution = solveShifts.alternative_solve(shiftsN: out shiftsN, shiftsO: out shiftsO);
+
+            Array.ForEach(solution.Goals.ToArray(), g => Console.WriteLine("Goal: {0}", g.ToDouble()));
+
+            /*foreach (var shift in shiftsN)
+                Console.WriteLine("{0,5} {2:hh}:{2:mm}-{3:hh}:{3:mm}: {1,3} agents", shift.Key.Name, shift.Value.ToDouble(), shift.Key.Start, shift.Key.End);
+            foreach (var shift in shiftsO)
+                Console.WriteLine("{0,5} {2:hh}:{2:mm}-{3:hh}:{3:mm}: {1,3} agents", shift.Key.Name, shift.Value.ToDouble(), shift.Key.Start, shift.Key.End);
+            
+            Console.WriteLine(solution.GetReport());*/
+            DisplaySolution(solveShifts, shiftsN, shiftsO, solution);
+            Console.ReadLine();
+        }
+
         protected static void Services_ColumnGenerator()
         {
             Services.ColumnGeneration generation = new Services.ColumnGeneration();
@@ -345,6 +418,22 @@ namespace Samples.Solvers
         protected static TimeSpan GetTimeSpanMinutes(int minutes)
         {
             return new TimeSpan(hours: 0, minutes: minutes, seconds: 0);
+        }
+
+        protected static void DisplaySolution(CSP.ShiftsPlanner sp, Dictionary<CSP.Models.Shift, Decision> shiftsN, Dictionary<CSP.Models.Shift, Decision> shiftsO, Solution solution)
+        {
+            List<CSP.Models.ShiftForce> shiftsForce = new List<CSP.Models.ShiftForce>();
+            foreach (var shift in shiftsN)
+            {
+                var force = shift.Value.ToDouble();
+                shiftsForce.Add(new CSP.Models.ShiftForce(shift: shift.Key, force: (int)force));
+            }
+            foreach (var shift in shiftsO)
+            {
+                var force = shift.Value.ToDouble();
+                shiftsForce.Add(new CSP.Models.ShiftForce(shift: shift.Key, force: (int)force));
+            }
+            sp.ShowSolution(1, shiftsForce, showAgents: true, showSlots: true);
         }
     }
 }
