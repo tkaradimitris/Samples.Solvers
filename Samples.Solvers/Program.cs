@@ -35,7 +35,7 @@ namespace Samples.Solvers
                 while (option == -1)
                 {
                     PrintOptions(options);
-                    option = ReadSelectionInt(label: "select option no", defaultNo: 1, min: 0, max: options.Count);
+                    option = ReadSelectionInt(label: "select option no", defaultNo: 8, min: 0, max: options.Count);
                     if (option > 0 && (option > options.Count || option < 0)) option = -1;
                 }
 
@@ -76,6 +76,11 @@ namespace Samples.Solvers
                 }
                 else if (option == 7)
                     Services_ColumnGenerator();
+                else if (option == 8)
+                {
+                    Services.SlotAllocation slotSolver = new Services.SlotAllocation();
+                    slotSolver.Solve(forFiveDays: true);
+                }
 
 
                 Console.WriteLine("-press any key to restart or Ctrl-c to exit -");
@@ -169,7 +174,6 @@ namespace Samples.Solvers
                     shiftsForce.Add(new CSP.Models.ShiftForce(shift: shift.Key, force: (int)force));
                 }
                 solveShifts.ShowSolution(1, shiftsForce, showAgents: true, showSlots: true);
-                
             }
             else
             {
@@ -287,6 +291,7 @@ namespace Samples.Solvers
             options.Add(5, "Rosenbrock - Rosenbrock function");
             options.Add(6, "CuttingStock - Cut cloth roll with min waste");
             options.Add(7, "Services01 - Column Generation");
+            options.Add(8, "Services02 - Slot Allocation");
             return options;
         }
 
