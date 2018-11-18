@@ -380,7 +380,8 @@ namespace Samples.Solvers.CSP
             var sumReqs = HalfHourRequirements.Sum(x => x.RequiredForce);
             model.AddGoal("Minimize_excess", GoalKind.Minimize, Model.Sum(excess.ToArray()) - sumReqs);
 
-            Solution solution = SC.Solve();
+            SimplexDirective simplex = new SimplexDirective();
+            Solution solution = SC.Solve(simplex);
 
             shiftsN = normal_shifts;
             shiftsO = overtime_shifts;
