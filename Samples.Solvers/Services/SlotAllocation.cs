@@ -82,6 +82,7 @@ namespace Samples.Solvers.Services
             public int SlotNo { get; set; }
             public string Slot { get; set; }
             public int Available { get; set; }
+            public bool IsFiveDaySlot { get; set; }
 
             public override string ToString()
             {
@@ -102,6 +103,25 @@ namespace Samples.Solvers.Services
             }
         }
 
+        public bool[,] CreateCompatibilityArray(List<SlotAvailable> slots)
+        {
+            bool[,] compArr = new bool[slots.Count, slots.Count];
+            SlotAvailable[] slotsArr = slots.ToArray();
+
+            for (int i = 0; i < compArr.GetLength(0); i++)
+                for (int j = 0; j < compArr.GetLength(1); j++)
+                {
+                    bool IsFiveDays_i = slotsArr[i].IsFiveDaySlot;
+                    String n_i = slotsArr[i].Slot;
+                    bool IsFiveDays_j = slotsArr[j].IsFiveDaySlot;
+                    String n_j = slotsArr[j].Slot;
+
+                    compArr[i, j] = Models.Season.AreSlotsCompatible(season.Slots(IsFiveDays_i)[n_i], season.Slots(IsFiveDays_j)[n_j]);
+                }
+
+            return compArr;
+        }
+
         public void Solve(bool forFiveDays)
         {
             var context = SolverContext.GetContext();
@@ -118,8 +138,11 @@ namespace Samples.Solvers.Services
             //how many places each slot has available (for contraint, to avoid assigning more people to each one)
             var slots = forFiveDays ? season.FiveDaysSlots : season.TenDaysSlots;
             var slotAvailability = slots
-                .Select(x => new SlotAvailable() { SlotNo = slots.IndexOf(x), Slot=x.Name, Available = x.Available })
+                .Select(x => new SlotAvailable() { SlotNo = slots.IndexOf(x), Slot=x.Name, Available = x.Available, IsFiveDaySlot = x.Duration.Days == 5 ? true : false })
                 .ToList();
+            //var slotAvailability = season.FiveDaysSlots
+            //    .Select(x => new SlotAvailable() { SlotNo = slots.IndexOf(x), Slot = x.Name, Available = forFiveDays && x.Duration.TotalDays == 5 ? x.Available : 0})
+            //    .ToList();
             //here we will also add other preassigned slots, of any duration, to use for compatibility checks
 
 
@@ -163,13 +186,25 @@ namespace Samples.Solvers.Services
                             {
                                 SlotNo = slotAvailability.Count,
                                 Slot = slot.Name,
-                                Available = 0
+                                Available = 0,
+                                IsFiveDaySlot = slot.Duration.Days == 5 ? true : false
                             });
                         }
                     }
                 }
             }
             #endregion Data
+
+            //compatibility test
+            bool[,] CompatibilityArray = CreateCompatibilityArray(slotAvailability);
+
+            for (int i = 0; i < CompatibilityArray.GetLength(0); i++)
+            {
+                for (int j = 0; j < CompatibilityArray.GetLength(1); j++)
+                    Console.Write(String.Format("{0} ", CompatibilityArray[i, j]));
+                Console.WriteLine();
+            }
+            Console.ReadLine();
 
             //Creating the sets
             Set setSlotNo = new Set(Domain.IntegerNonnegative, "SetSlotNo");
@@ -238,7 +273,15 @@ namespace Samples.Solvers.Services
             //problem is that SFS puts limits on variables and throws an exception if we add too many of them
             //so i tried another approach with simpler incompatibities, to stay lower than the SFS limit
             //it appears that when lpSolve is being used, no limits are enforced
-            if (true)
+
+            for (int i=0; i<CompatibilityArray.GetLength(0); i++)
+                for (int j=i+1; j<CompatibilityArray.GetLength(1); j++)
+                    if (CompatibilityArray[i, j])
+                        model.AddConstraint(String.Format("Incompatibility_{0}_{1}", i, j), Model.ForEach(setPersonId, person => 
+                                                                                                          decisionPersonSlots[i, person] + decisionPersonSlots[j, person]
+                                                                                                          <= Rational.One));
+
+            /*if (true)
             {
                 var minSlot = 0;
                 var maxSlot = slotAvailability.Count;
@@ -309,7 +352,7 @@ namespace Samples.Solvers.Services
                                                                     <= Rational.One));
                     }
                 }
-            }
+            }*/
 
             //Minize the number of assigned slots (more people happy :) )
             //model.AddGoal("TotalRolls", GoalKind.Maximize, Model.Sum(Model.ForEach(setSlotNo, slot => Model.Sum(Model.ForEach(setPersonId, person => decisionPersonSlots[slot, person])))));
