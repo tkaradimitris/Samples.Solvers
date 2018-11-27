@@ -34,7 +34,13 @@ namespace Samples.Solvers.Services.Models
             }
         }
 
+        public Dictionary<string, SeasonSlot> Slots(bool f)
+        {
+            return slots[f];
+        }
+
         private static TimeSpan ts7days = new TimeSpan(days: 5, hours: 0, minutes: 0, seconds: 0);
+        private static TimeSpan ts30days = new TimeSpan(days: 30, hours: 0, minutes: 0, seconds: 0);
 
         public Season() : this("Season")
         {
@@ -169,10 +175,10 @@ namespace Samples.Solvers.Services.Models
             else if (slotB.Start >= slotA.Start && slotB.Start <= slotA.End)
                 compatible = false;
             //Slot B follows slot A really closely
-            else if (slotA.End < slotB.Start && slotB.Start - slotA.End < ts7days)
+            else if (slotA.End < slotB.Start && slotB.Start - slotA.End < ts30days)
                 compatible = false;
             //Slot A follows slot B really closely
-            else if (slotB.End < slotA.Start && slotA.Start - slotB.End < ts7days)
+            else if (slotB.End < slotA.Start && slotA.Start - slotB.End < ts30days)
                 compatible = false;
 
             return compatible;
